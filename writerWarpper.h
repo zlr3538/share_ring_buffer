@@ -1,18 +1,21 @@
-#ifndef AACWRITER_H
-#define AACWRITER_H
-#include "Writer.h"
+#ifndef WRITERWARPPER_H
+#define WRITERWARPPER_H
+#include "writerBase.h"
 
-class AACWriter : public Writer
-{
-    protected:
-        ringbuf_aac_hdr *rbuf_aac_hdr;
+typedef struct {
+    int id;
+    int format;
+    int bitrate;
+    int fps;
+    int width;
+    int height;
+    char desc[32];
+}stream_info;
 
-    public:
-        AACWriter();
-        virtual ~AACWriter();
-        virtual int init(const int key, const size_t share_data_size, const size_t frame_array_num);
-        virtual int set_extra_hdr(const void *ringbuf_extra_hdr);
-        virtual codec_type get_writer_codec_type();
-};
+typedef struct {
+    int fnum;
+    int iframe;
+    int pts;
+}frame_info;
 
-#endif /* AACWRITER_H */
+#endif /* WRITERWARPPER_H */

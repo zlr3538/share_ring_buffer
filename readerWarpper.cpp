@@ -1,47 +1,51 @@
-#include "AACReader.h"
+#include "readerWarpper.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <signal.h>
+#include <sys/time.h>
+#include <time.h>
 
-AACReader::AACReader(const int key): Reader(key)
-{
-    rbuf_aac_hdr = NULL;
+static int exit_flag = 0;
+
+void signal_handler(int signum)
+{   
+    printf("catch %d\n",signum);
+    exit_flag = 1;
 }
 
-AACReader::~AACReader()
+int main(int argc, char* argv[])
 {
+    time_t t;
+    signal(SIGINT,signal_handler);
 
-}
+    stream_info stream1 = {0};
 
-int AACReader::init()
-{
-    int ret = -1;
-    do {
+    readerBase *data_reader = new readerBase();
+    data_reader->init(1001);
+    data_reader->get_extra_hdr(&stream1, sizeof(stream_info));
 
-        if (key != GENE_AUDIO_KEY(STREAM_AUDIO_AAC)) {
-            warn("key should be create by GENE_AUDIO_KEY(%d)\n", STREAM_AUDIO_AAC);
-        }
-        if (Reader::init(sizeof(ringbuf_aac_hdr), sizeof(frame_basic_hdr)) != 0) {
-            break;
-        }
-        rbuf_aac_hdr = (ringbuf_aac_hdr *)rbuf_basic_hdr;
-        ret = 0;
-    } while (false);
-    return ret;
-}
+    printf("id:%d, format:%d, bitrate:%d, fps:%d\n",stream1.id, stream1.format, stream1.bitrate, stream1.fps);
+    printf("resolution:%dx%d, desc:%s\n",stream1.width, stream1.height, stream1.desc);
+    
+    int frame_count = 0;
+    size_t ret = -1;
+    size_t data_size = 0;
+    char *data = NULL;
+    frame_info frame = {0};
 
-int AACReader::get_extra_hdr(void *ringbuf_extra_hdr)
-{
-    int ret = -1;
-    do {
-        if (!ringbuf_extra_hdr) {
-            erro("ringbuf extra hdr is null\n");
-            break;
-        }
-        if ((shm_id != -1) && (shm_ptr)) {
-            memcpy((char *)ringbuf_extra_hdr, (char *)&rbuf_aac_hdr->extra_hdr, sizeof(ringbuf_extra_hdr_aac));
-        } else {
-            erro("need to init aac writer first\n");
-            break;
-        }
-        ret = 0;
-    } while (false);
-    return ret;
+    while(!exit_flag) {
+        ret = data_reader->get_frame((char*)&frame, sizeof(frame_info), &data, &data_size);
+        if(ret == 0)
+            printf("fnum:%d, iframe:%d, pts:%d\n",frame.fnum, frame.iframe, frame.pts);
+        else
+            usleep(100000);
+        data_reader->debug_ringbuf();
+        // usleep(100000);
+    };
+
+    data_reader->deinit();
+
+    printf("hello readerWarpper\n");
+    return 0;
 }

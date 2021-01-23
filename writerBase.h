@@ -28,17 +28,16 @@ class writerBase
         void clean_internal_data();
         int assign_for_new_frame(const size_t size);
         int update_for_new_frame();
-        int init(const int key, const size_t share_data_size, const size_t ringbuf_hdr_size,
-                const size_t frame_array_num, const size_t frame_each_size);
 
     public:
         writerBase();
-        virtual ~writerBase();
-        virtual int init(const int key, const size_t share_data_size, const char *ringbuf_hdr,
-                const size_t ringbuf_hdr_size, const size_t frame_hdr_size) = 0;
-        virtual int deinit();
-        virtual size_t push_frame(const char *frame_hdr, const char *frame_data,
+        ~writerBase();
+        int init(const int key, const size_t share_data_size, const char *ringbuf_hdr,
+                const size_t ringbuf_hdr_size, const size_t frame_hdr_size);
+        int deinit();
+        size_t push_frame(const char *frame_hdr, const char *frame_data,
                 const size_t data_size);
+        void debug_ringbuf();
 };
 
 #endif /* WRITERBASE_H */

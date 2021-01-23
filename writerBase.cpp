@@ -37,9 +37,13 @@ RE_CAL:
         remain_size = rbuf_hdr_ptr->share_data_size - rbuf_hdr_ptr->rear_offset;
     }
     else if (rbuf_hdr_ptr->rear_offset - rbuf_hdr_ptr->front_offset == 0) {
-        if(rbuf_hdr_ptr->front_offset == 0 && rbuf_hdr_ptr->rear_offset == 0)
-            remain_size = rbuf_hdr_ptr->share_data_size;
-        else
+        if(rbuf_hdr_ptr->frame_count == 0) {
+            sem_wait(sem_ptr);
+            rbuf_hdr_ptr->front_offset = 0;
+            rbuf_hdr_ptr->rear_offset = 0;
+            sem_post(sem_ptr);
+            remain_size = rbuf_hdr_ptr->share_data_size - rbuf_hdr_ptr->rear_offset;
+        } else
             remain_size = 0;
     }
     else {
@@ -48,23 +52,44 @@ RE_CAL:
     
     sem_wait(sem_ptr);
     
+    // dbug("total_size:%d remain_size:%d short:%d\n",frame_total_size,remain_size,short_size);
+
     //check if need to free some space for new frame
-    if (remain_size - frame_total_size >=0) {
+    if (remain_size - frame_total_size >= 0) {
         //do not need free space
         data_write_offset = rbuf_hdr_ptr->rear_offset;
     } else {
         //maybe tail space is not enough
         if (rbuf_hdr_ptr->rear_offset - rbuf_hdr_ptr->front_offset > 0) {
             rbuf_hdr_ptr->rear_offset = 0;
+            sem_post(sem_ptr);
             goto RE_CAL;
         }
         //tyr to free space some frames
         short_size = frame_total_size - remain_size;
         while(short_size > 0) {
             frame_basic_hdr *front_frame_hdr = (frame_basic_hdr *)((char *)data_write_ptr + rbuf_hdr_ptr->front_offset);
+            if(front_frame_hdr->magic != MAGIC_HEADER) {
+                short_size -= rbuf_hdr_ptr->share_data_size - rbuf_hdr_ptr->front_offset;
+                rbuf_hdr_ptr->front_offset = 0;
+                if(short_size > 0) {
+                    rbuf_hdr_ptr->rear_offset = 0;
+                    sem_post(sem_ptr);
+                    goto RE_CAL;
+                } else {
+                    break;
+                }
+            }
             short_size -= front_frame_hdr->frame_hdr_size + front_frame_hdr->frame_data_size;
             rbuf_hdr_ptr->front_offset = front_frame_hdr->frame_end_offset;
+            front_frame_hdr->magic = 0x0;
             rbuf_hdr_ptr->frame_count -= 1;
+        }
+        if (short_size > 0) {
+            erro("opps!!!!\n");
+            erro("front:%d rear:%d count:%d\n",rbuf_hdr_ptr->front_offset,rbuf_hdr_ptr->rear_offset,rbuf_hdr_ptr->frame_count);
+            erro("total_size:%d remain_size:%d short:%d\n",frame_total_size,remain_size,short_size);
+            while(true);
         }
         data_write_offset = rbuf_hdr_ptr->rear_offset;
     }
@@ -158,6 +183,7 @@ int writerBase::deinit()
 {
     if ((shm_fd != -1) && (shm_ptr)) {
         sem_wait(sem_ptr);
+        sem_post(sem_ptr);
         sem_close(sem_ptr);
         sem_unlink(sem_name);
         munmap(shm_ptr, shm_size);
@@ -179,9 +205,16 @@ size_t writerBase::push_frame(const char *frame_hdr, const char *frame_data,
     int ret = -1;
     do {
         if ((shm_fd != -1) && (shm_ptr)) {
+            if(rbuf_hdr_ptr->frame_hdr_size + data_size > rbuf_hdr_ptr->share_data_size)
+            {
+                erro("frame size overflow!\n");
+                break;
+            }
+
             assign_for_new_frame(data_size);
             
             frame_basic_hdr *fam_basic_hdr = (frame_basic_hdr *)((char *)data_write_ptr + data_write_offset);
+            fam_basic_hdr->magic = MAGIC_HEADER;
             fam_basic_hdr->fid = rbuf_hdr_ptr->frame_count;
             fam_basic_hdr->frame_hdr_size = rbuf_hdr_ptr->frame_hdr_size;
             fam_basic_hdr->frame_data_size = data_size;
@@ -208,3 +241,12 @@ size_t writerBase::push_frame(const char *frame_hdr, const char *frame_data,
     return ret;
 }
 
+void writerBase::debug_ringbuf()
+{
+    info("ringbuf_basic_hdr front:%d, rear:%d, count:%d\n",
+        rbuf_hdr_ptr->front_offset,
+        rbuf_hdr_ptr->rear_offset,
+        rbuf_hdr_ptr->frame_count);
+    
+    return;
+}

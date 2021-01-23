@@ -35,7 +35,7 @@ int readerBase::init(const int key)
         }
         snprintf(shm_name,32,"ringbuf_shm_%d",key);
         snprintf(sem_name,32,"ringbuf_sem_%d",key);
-        shm_fd = shm_open(shm_name, O_RDWR | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+        shm_fd = shm_open(shm_name, O_RDWR, S_IRUSR | S_IWUSR);
         if (shm_fd < 0) {
             erro("fail to open shm:%s\n", strerror(errno));
             ret = errno;
@@ -75,7 +75,7 @@ int readerBase::init(const int key)
 
         sem_ptr = sem_open(sem_name, O_RDWR);
         if (!sem_ptr) {
-            erro("fail to create sem:%s\n", strerror(errno));
+            erro("fail to open sem:%s\n", strerror(errno));
             ret = errno;
             break;
         }
@@ -100,7 +100,7 @@ size_t readerBase::get_extra_hdr(void *ringbuf_extra_hdr,size_t hdr_size)
             memcpy((char*)ringbuf_extra_hdr,rbuf_hdr_ptr->ringbuf_extra_hdr,hdr_size);
             ret = hdr_size;
         } else {
-            erro("ringbuf extra hdr size invalid: %d,%d\n", rbuf_hdr_ptr->ringbuf_hdr_size - sizeof(ringbuf_basic_hdr),
+            erro("ringbuf extra hdr size invalid: %lu,%lu\n", rbuf_hdr_ptr->ringbuf_hdr_size - sizeof(ringbuf_basic_hdr),
                     hdr_size);
         }
     } else {
@@ -113,6 +113,7 @@ int readerBase::deinit()
 {
     if ((shm_fd != -1) && (shm_ptr)) {
         sem_wait(sem_ptr);
+        sem_post(sem_ptr);
         sem_close(sem_ptr);
         munmap(shm_ptr, shm_size);
         /*
@@ -138,14 +139,17 @@ size_t readerBase::get_frame(void *hdr_ptr, size_t hdr_size, char **data_ptr, si
                 erro("no frame available \n");
                 break;
             }
-            
             sem_wait(sem_ptr);
             
             frame_basic_hdr *front_basic_hdr = (frame_basic_hdr *)((char *)data_read_ptr + rbuf_hdr_ptr->front_offset);
+            if (front_basic_hdr->magic != MAGIC_HEADER) {
+                rbuf_hdr_ptr->front_offset = 0;
+                frame_basic_hdr *front_basic_hdr = (frame_basic_hdr *)((char *)data_read_ptr + rbuf_hdr_ptr->front_offset);
+            }
             if (hdr_size == front_basic_hdr->frame_hdr_size - sizeof(frame_basic_hdr)) {
                 memcpy((char*)hdr_ptr,front_basic_hdr->frame_extra_hdr,hdr_size);
             } else {
-                erro("frame extra hdr size invalid: %d,%d\n", 
+                erro("frame extra hdr size invalid: %lu,%lu\n", 
                         front_basic_hdr->frame_hdr_size - sizeof(frame_basic_hdr), hdr_size);
                 sem_post(sem_ptr);
                 break;
@@ -186,3 +190,12 @@ bool readerBase::is_frame_ready(unsigned long long fid=0)
     return ret;
 }
 
+void readerBase::debug_ringbuf()
+{
+    info("ringbuf_basic_hdr front:%d, rear:%d, count:%d\n",
+        rbuf_hdr_ptr->front_offset,
+        rbuf_hdr_ptr->rear_offset,
+        rbuf_hdr_ptr->frame_count);
+    
+    return;
+}

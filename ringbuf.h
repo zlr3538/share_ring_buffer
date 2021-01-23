@@ -27,7 +27,10 @@
 #define crit(fmt, ...) fprintf(stderr, fmt, ## __VA_ARGS__)
 #endif
 
+#define MAGIC_HEADER (0x20210124)
+
 typedef struct {
+    unsigned int magic;
     unsigned long long fid;
     struct timeval fpts;
     size_t frame_hdr_size;

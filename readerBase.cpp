@@ -134,24 +134,33 @@ size_t readerBase::get_frame(void *hdr_ptr, size_t hdr_size, char **data_ptr, si
     int ret = -1;
     do {
         if ((shm_fd != -1) && (shm_ptr)) {
+            sem_wait(sem_ptr);
+            
             if(rbuf_hdr_ptr->frame_count == 0)
             {
                 erro("no frame available \n");
+                sem_post(sem_ptr);
                 break;
             }
-            sem_wait(sem_ptr);
-            
+RE_READ:
             frame_basic_hdr *front_basic_hdr = (frame_basic_hdr *)((char *)data_read_ptr + rbuf_hdr_ptr->front_offset);
             if (front_basic_hdr->magic != MAGIC_HEADER) {
+                dbug("frame hdr magic error %d\n", front_basic_hdr->magic);
                 rbuf_hdr_ptr->front_offset = 0;
-                frame_basic_hdr *front_basic_hdr = (frame_basic_hdr *)((char *)data_read_ptr + rbuf_hdr_ptr->front_offset);
+                goto RE_READ;
             }
             if (hdr_size == front_basic_hdr->frame_hdr_size - sizeof(frame_basic_hdr)) {
                 memcpy((char*)hdr_ptr,front_basic_hdr->frame_extra_hdr,hdr_size);
+                front_basic_hdr->magic = 0x0;
             } else {
                 erro("frame extra hdr size invalid: %lu,%lu\n", 
                         front_basic_hdr->frame_hdr_size - sizeof(frame_basic_hdr), hdr_size);
+                erro("debug info front:%d, rear:%d, count:%d\n",
+                    rbuf_hdr_ptr->front_offset,
+                    rbuf_hdr_ptr->rear_offset,
+                    rbuf_hdr_ptr->frame_count);
                 sem_post(sem_ptr);
+                while(true);
                 break;
             }
             
@@ -192,7 +201,7 @@ bool readerBase::is_frame_ready(unsigned long long fid=0)
 
 void readerBase::debug_ringbuf()
 {
-    info("ringbuf_basic_hdr front:%d, rear:%d, count:%d\n",
+    info("debug_ringbuf front:%d, rear:%d, count:%d\n",
         rbuf_hdr_ptr->front_offset,
         rbuf_hdr_ptr->rear_offset,
         rbuf_hdr_ptr->frame_count);

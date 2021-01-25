@@ -37,11 +37,11 @@ int main(int argc, char* argv[])
     while(!exit_flag) {
         ret = data_reader->get_frame((char*)&frame, sizeof(frame_info), &data, &data_size);
         if(ret == 0)
-            printf("fnum:%d, iframe:%d, pts:%d\n",frame.fnum, frame.iframe, frame.pts);
+            printf("fnum:%d, size:%d iframe:%d, pts:%d\n",frame.fnum, data_size, frame.iframe, frame.pts);
         else
-            usleep(100000);
-        data_reader->debug_ringbuf();
-        // usleep(100000);
+            data_reader->debug_ringbuf();
+        //data_reader->debug_ringbuf();
+        usleep(33333);
     };
 
     data_reader->deinit();

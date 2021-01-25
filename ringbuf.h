@@ -31,7 +31,7 @@
 
 typedef struct {
     unsigned int magic;
-    unsigned long long fid;
+    int fid;
     struct timeval fpts;
     size_t frame_hdr_size;
     size_t frame_data_size;
@@ -47,6 +47,7 @@ typedef struct {
     int front_offset;
     int rear_offset;
     int frame_count;
+    int frame_id;
     char ringbuf_extra_hdr[0];
 } ringbuf_basic_hdr;
 
